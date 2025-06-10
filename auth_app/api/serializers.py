@@ -25,6 +25,7 @@ class RegisterSerializer(serializers.Serializer):
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
 
+    username = serializers.CharField(source='user.username', read_only=True)
     first_name = serializers.CharField(max_length=30, required=False)
     last_name = serializers.CharField(max_length=30, required=False)
     file = serializers.FileField(required=False)
@@ -32,11 +33,13 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
     type = serializers.CharField(max_length=50, default='customer')
 
     class Meta:
-        fields = '__all__'
-        model = BusinessProfile
+
+        model = CustomerProfile
+        exclude = ('id')
 
 class BusinessProfileSerializer(serializers.ModelSerializer):
 
+    username = serializers.CharField(source='user.username', read_only=True)
     first_name = serializers.CharField(max_length=30, required=False)
     last_name = serializers.CharField(max_length=30, required=False)
     file = serializers.FileField(required=False)
@@ -47,5 +50,6 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
     type = serializers.CharField(max_length=50, default='business')
 
     class Meta:
-        fields = '__all__'
+
         model = BusinessProfile
+        exclude = ('id')
