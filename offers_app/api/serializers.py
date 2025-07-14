@@ -34,17 +34,51 @@ class PackageDetailSerializer(serializers.ModelSerializer):
 
 
 class OfferSerializer(serializers.ModelSerializer):
-    details = PackageDetailSerializer(many=True)
+    # 👇 Immer noch für WRITE
+    details = PackageDetailSerializer(many=True, write_only=True)
+
+    # 👇 Dynamisch gefiltert für READ
+    filtered_details = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Offer
-        fields = ('id', 'title', 'image', 'description', 'details')
+        fields = ('id', 'title', 'image', 'description', 'details', 'filtered_details')
         read_only_fields = ('user',)
 
+    def get_filtered_details(self, obj):
+        request = self.context.get('request')
+        details_qs = obj.details.all()
+
+        min_price = request.query_params.get('min_price') if request else None
+        max_delivery_time = request.query_params.get('max_delivery_time') if request else None
+
+        if min_price:
+            try:
+                details_qs = details_qs.filter(price__gte=float(min_price))
+            except ValueError:
+                pass
+
+        if max_delivery_time:
+            try:
+                details_qs = details_qs.filter(delivery_time_in_days__lte=int(max_delivery_time))
+            except ValueError:
+                pass
+
+        return PackageDetailSerializer(details_qs, many=True).data
+
     def validate_details(self, value):
-        print(self.context.get("request").method)
-        if self.context.get("request").method == 'POST' and len(value) != 3:
-            raise serializers.ValidationError("An offer must contain exactly 3 details.")
+        request = self.context.get("request")
+        if request and request.method in ['POST', 'PUT', 'PATCH']:
+            for detail in value:
+                if 'offer_type' not in detail:
+                    raise serializers.ValidationError(
+                        {"details": "Each detail must include 'offer_type'."}
+                    )
+
+            if request and request.method == 'POST' and len(value) != 3:
+                raise serializers.ValidationError(
+                    "An offer must contain exactly 3 details."
+                )
         return value
 
     def create(self, validated_data):
@@ -64,7 +98,6 @@ class OfferSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         details_data = validated_data.pop('details', None)
 
-        # Update Offer-Felder
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -88,3 +121,15 @@ class OfferSerializer(serializers.ModelSerializer):
                     detail.features.add(feature)
 
         return instance
+
+
+class FilteredPackageDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PackageDetail
+        exclude = ('offer',)
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['features'] = list(instance.features.values_list('name', flat=True))
+        rep['price'] = float(instance.price)
+        return rep

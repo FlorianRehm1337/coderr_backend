@@ -19,10 +19,7 @@ class ProfileView(generics.RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
 
     def get(self, request, pk):
-        try:
-            user = User.objects.get(id=pk)
-        except User.DoesNotExist:
-            return Response({"error": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+        user = get_object_or_404(User, id=pk)
 
         if hasattr(user, 'customer'):
             user_role = user.customer
@@ -34,7 +31,7 @@ class ProfileView(generics.RetrieveUpdateAPIView):
 
 
     def patch(self, request, pk):
-        user = User.objects.get(id=pk)
+        user = get_object_or_404(User, id=pk)
         if user != request.user:
             return Response({"error": "Authentifizierter Benutzer ist nicht der Eigentümer Profils"}, status=status.HTTP_403_FORBIDDEN)
         if hasattr(request.user, 'customer'):

@@ -45,8 +45,9 @@ class LoginView(generics.ListAPIView):
         View for user login.
         """
         user = User.objects.get(username=request.data['username'])
+        correct_password = user.check_password(request.data['password'])
         user_token = Token.objects.get_or_create(user=user.id)
-        if user:
+        if user and correct_password is True:
             return Response({
                 "token": user_token[0].key,
                 "username": user.username,

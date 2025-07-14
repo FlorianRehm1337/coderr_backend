@@ -35,7 +35,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
     class Meta:
 
         model = CustomerProfile
-        exclude = ('id')
+        exclude = ('id',)
 
 class BusinessProfileSerializer(serializers.ModelSerializer):
 
@@ -52,4 +52,4 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
     class Meta:
 
         model = BusinessProfile
-        exclude = ('id')
+        exclude = ('id',)
