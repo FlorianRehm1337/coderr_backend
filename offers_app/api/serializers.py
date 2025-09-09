@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from offers_app.filters import OfferFilterHelper
 from offers_app.models import Feature, Offer, PackageDetail
 
 class FeatureSerializer(serializers.ModelSerializer):
@@ -37,34 +38,72 @@ class OfferSerializer(serializers.ModelSerializer):
     # 👇 Immer noch für WRITE
     details = PackageDetailSerializer(many=True, write_only=True)
 
-    # 👇 Dynamisch gefiltert für READ
-    filtered_details = serializers.SerializerMethodField(read_only=True)
+    # 👇 Dynamisch gefiltert für READ - nur ID und URL
+    details = serializers.SerializerMethodField(read_only=True)
+
+    # 👇 Neue Felder für min_price und min_delivery_time
+    min_price = serializers.SerializerMethodField(read_only=True)
+    min_delivery_time = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Offer
-        fields = ('id', 'title', 'image', 'description', 'details', 'filtered_details')
-        read_only_fields = ('user',)
+        fields = ('id', 'user', 'title', 'image', 'description', 'created_at', 'updated_at', 'details', 'min_price', 'min_delivery_time')
+        read_only_fields = ('user', 'created_at', 'updated_at')
 
-    def get_filtered_details(self, obj):
+    def get_details(self, obj):
+        """
+        Gib nur ID und URL für Details zurück
+        """
+        # Verwende vorgefilterte Details falls vorhanden
+        if hasattr(obj, '_filtered_details'):
+            details_list = obj._filtered_details
+        else:
+            # Fallback - verwende FilterHelper
+            request = self.context.get('request')
+            details_qs = obj.details.all()
+            details_list = OfferFilterHelper.filter_details_by_request(details_qs, request)
+
+        # Erstelle die Detail-Objekte mit ID und URL
         request = self.context.get('request')
-        details_qs = obj.details.all()
+        result = []
+        for detail in details_list:
+            detail_data = {
+                'id': detail.id,
+                'url': request.build_absolute_uri(f'/api/offerdetails/{detail.id}/') if request else f'/api/offerdetails/{detail.id}/'
+            }
+            result.append(detail_data)
 
-        min_price = request.query_params.get('min_price') if request else None
-        max_delivery_time = request.query_params.get('max_delivery_time') if request else None
+        return result
 
-        if min_price:
-            try:
-                details_qs = details_qs.filter(price__gte=float(min_price))
-            except ValueError:
-                pass
+    def get_min_price(self, obj):
+        """
+        Ermittele den minimalen Preis aus den gefilterten Details
+        """
+        if hasattr(obj, '_filtered_details'):
+            details_list = obj._filtered_details
+        else:
+            request = self.context.get('request')
+            details_qs = obj.details.all()
+            details_list = OfferFilterHelper.filter_details_by_request(details_qs, request)
 
-        if max_delivery_time:
-            try:
-                details_qs = details_qs.filter(delivery_time_in_days__lte=int(max_delivery_time))
-            except ValueError:
-                pass
+        if details_list:
+            return min(detail.price for detail in details_list)
+        return None
 
-        return PackageDetailSerializer(details_qs, many=True).data
+    def get_min_delivery_time(self, obj):
+        """
+        Ermittele die minimale Lieferzeit aus den gefilterten Details
+        """
+        if hasattr(obj, '_filtered_details'):
+            details_list = obj._filtered_details
+        else:
+            request = self.context.get('request')
+            details_qs = obj.details.all()
+            details_list = OfferFilterHelper.filter_details_by_request(details_qs, request)
+
+        if details_list:
+            return min(detail.delivery_time_in_days for detail in details_list)
+        return None
 
     def validate_details(self, value):
         request = self.context.get("request")
